@@ -2,6 +2,7 @@ import sympy
 import numpy
 import os #operating system
 #time
+import time
 from time import strftime
 #plotting
 import matplotlib.pyplot as plt
@@ -88,6 +89,7 @@ class Calculation:
         return [x,y,z,wavelength,OptorRes]
 
     def PlotIntensity(self,xyzlambda_array):
+        start=time.time()
         x,y,z,l,OptOrRes=xyzlambda_array
         z=numpy.array(z)
         fig = plt.figure()
@@ -114,6 +116,8 @@ class Calculation:
             content.append("\n"+str([x[i],y[i],z[i]]))
         file.writelines(content)
         file.close()
+        end=time.time()
+        print(end-start)
 
     def Plot_RecalculateCoordinatesFFT(self,xyzlambda_array):
         "recalculate x,y from opt to res"
