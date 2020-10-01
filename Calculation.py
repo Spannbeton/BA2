@@ -351,17 +351,10 @@ class Calculation:
         p=[]
         for i in range(0, self.Settings.sampling_spectral_N):
             print("Plotting "+str(self.calc_sampling_lambda[i]*10**9)+"nm")
-            pdirproc = threading.Thread(target=self.Plot_Direction,args=(i,self.Settings.sampling_OptOrRes))
-            p.append(pdirproc)
-            pdirproc.start()
-            #self.Plot_Direction(i,self.Settings.sampling_OptOrRes)
+            self.Plot_Direction(i,self.Settings.sampling_OptOrRes)
             # Create Beamplots
-            pbeaploc= threading.Thread(target=self.Plot_Beams,args=(i))
-            p.append(pbeaploc)
-            pbeaploc.start()
-            #self.Plot_Beams(i)
+            self.Plot_Beams(i)
         # Plot Spectrum
-        [pi.join() for pi in p]
         print("Plotting Spectrum")
         self.PlotSpectrum()
         # Save Data
