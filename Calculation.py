@@ -9,7 +9,7 @@ from matplotlib.ticker import LinearLocator, FixedLocator, FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 #multiprocessing
-from multiprocessing import Process,Manager
+import threading
 #my classes
 from SourceData import SourceData
 from OpticalElementData import OpticalElementData
@@ -337,32 +337,31 @@ class Calculation:
         pass
 
     def Calculation(self):
-        for i in range(0, self.Settings.sampling_spectral_N):
-            self.Calculate_for_Wavelength(i, self.Settings.sampling_OptOrRes)
-            print("Calculating " + str(self.calc_sampling_lambda[i] * 10 ** 9) + "nm")
         "Main Calculation Function"
-        ''' NON FUNCTIONAL THREADING IDEA
         p=[]
         for i in range (0,self.Settings.sampling_spectral_N):
-            print("Calculating " + str(i))
-            if __name__ == '__main__':
-                with Manager() as manager:
-                    k=manager.__init_subclass__(Calculation)
-                p.append(Process(target=self.Calculate_for_Wavelength,args=(k,i,self.Settings.sampling_OptOrRes)))
-                #self.Calculate_for_Wavelength(i,self.Settings.sampling_OptOrRes)
-                p[i].start()
+            p.append(threading.Thread(target=self.Calculate_for_Wavelength,args=(i,self.Settings.sampling_OptOrRes)))
+            p[i].start()
+            print("Calculating " + str(self.calc_sampling_lambda[i] * 10 ** 9) + "nm")
         [pi.join() for pi in p]
-        '''
         pass
 
     def Plot_All_SaveAll(self):
         "Main Plotting function"
+        p=[]
         for i in range(0, self.Settings.sampling_spectral_N):
             print("Plotting "+str(self.calc_sampling_lambda[i]*10**9)+"nm")
-            self.Plot_Direction(i,self.Settings.sampling_OptOrRes)
+            pdirproc = threading.Thread(target=self.Plot_Direction,args=(i,self.Settings.sampling_OptOrRes))
+            p.append(pdirproc)
+            pdirproc.start()
+            #self.Plot_Direction(i,self.Settings.sampling_OptOrRes)
             # Create Beamplots
-            self.Plot_Beams(i)
+            pbeaploc= threading.Thread(target=self.Plot_Beams,args=(i))
+            p.append(pbeaploc)
+            pbeaploc.start()
+            #self.Plot_Beams(i)
         # Plot Spectrum
+        [pi.join() for pi in p]
         print("Plotting Spectrum")
         self.PlotSpectrum()
         # Save Data
