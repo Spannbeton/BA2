@@ -9,15 +9,14 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import LinearLocator, FixedLocator, FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
-#multiprocessing
+#threading
 import threading
 #my classes
 from SourceData import SourceData
 from OpticalElementData import OpticalElementData
 from Settings import Settings
-
-
-
+#saving data
+import pickle
 
 
 class Calculation:
@@ -58,6 +57,7 @@ class Calculation:
             os.mkdir(self.Directory +"/Intensity_OPT/")
             os.mkdir(self.Directory +"/Intensity_RES/")
             os.mkdir(self.Directory +"/Beam Propagation/")
+            os.mkdir(self.Directory + "/Data/")
         except: #For the case that folder already exists
             print("Directory alreay exists")
 
@@ -341,17 +341,18 @@ class Calculation:
         pass
 
     def Calculation(self):
-        "Main Calculation Function"
+        "Main Calculation Function-Legacy Console based version"
         p=[]
         for i in range (0,self.Settings.sampling_spectral_N):
             p.append(threading.Thread(target=self.Calculate_for_Wavelength,args=(i,self.Settings.sampling_OptOrRes)))
             p[i].start()
-            print("Calculating " + str(self.calc_sampling_lambda[i] * 10 ** 9) + "nm")
+            #print("Calculating " + str(self.calc_sampling_lambda[i] * 10 ** 9) + "nm")
         [pi.join() for pi in p]
-        pass
+        print("Calculation done")
+
 
     def Plot_All_SaveAll(self):
-        "Main Plotting function"
+        "Main Plotting function-Legacy Console based version"
         p=[]
         for i in range(0, self.Settings.sampling_spectral_N):
             print("Plotting "+str(self.calc_sampling_lambda[i]*10**9)+"nm")
@@ -362,10 +363,27 @@ class Calculation:
         print("Plotting Spectrum")
         self.PlotSpectrum()
         # Save Data
-        print("Saving")
+        print("Saving Data")
         self.SaveInputData()
+        self.Save_Data()
         print("Calculating Result")
         self.Calculate_Coherence(self.Settings.sampling_OptOrRes)
-        pass
+
+    def Save_Data(self):
+        "Save SourceData,OpticalElementData,Settings"
+        path=self.Directory+"/Data"
+        datafile = open(path+"/SaveData.obj","wb+")
+        pickle.dump([self.SourceData,self.OpticalElementData,self.Settings], datafile)
+
+    def Load_Data(self,path):
+        "Load SourceData,OpticalElementData,Settings from file"
+        datafile = open(path, 'rb')
+        Data=Calculation(self.SourceData,self.OpticalElementData,self.Settings)
+        Data = pickle.load(datafile)
+        self.SourceData=Data[0]
+        self.OpticalElementData=Data[1]
+        self.Settings=Data[2]
+
+
 
 

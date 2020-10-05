@@ -5,6 +5,8 @@ from Settings import Settings
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+import threading
+import time
 
 class GUI:
     def __init__(self):
@@ -36,19 +38,21 @@ class GUI:
 
         #Calculation
         ttk.Label(self.tab1, text="Calculation & Plotting:", font=('Arial', 20), anchor='w').grid(column=0, row=0, pady=20,columnspan=3)
-        ttk.Button(self.tab1, text="Calculate", command=lambda:[self.calc.Calculation(),self.Plot_Button_enable()]).grid(column=0, row=1, padx=5, pady=5)
-        # Progressbar Calculation
-        ttk.Label(self.tab1, text="Progressbartext Calculation").grid(column=1, row=1)
-        self.progressbar = ttk.Progressbar(self.tab1, mode="determinate")
-        self.progressbar.grid(column=2, row=1, columnspan=2)
-
+        ttk.Button(self.tab1, text="Calculate", command=lambda:self.Calculation_Button_start()).grid(column=0, row=1, padx=5, pady=5)
+        #Text Plotting
+        self.Calculation_progressbartext = tk.StringVar()
+        self.Calculation_progressbartext.set("Ready for Calculation")
+        ttk.Label(self.tab1, textvariable=self.Calculation_progressbartext).grid(column=1, row=1)
         #Plotting
-        self.Plot_Button=ttk.Button(self.tab1, text="Plot", command=lambda:self.calc.Plot_All_SaveAll(),state=tk.DISABLED)
+        self.Plot_Button=ttk.Button(self.tab1, text="Plot", command=lambda:self.Plot_Button_start(),state=tk.DISABLED)
         self.Plot_Button.grid(column=0, row=2, padx=5, pady=5)
-        # Progressbar Calculation
-        ttk.Label(self.tab1, text="Progressbartext Plotting").grid(column=1, row=2)
-        self.progressbar = ttk.Progressbar(self.tab1, mode="determinate")
-        self.progressbar.grid(column=2, row=2, columnspan=2)
+        #Text Plotting
+        self.Plot_status=tk.StringVar()
+        self.Plot_status.set("Calculation required")
+        ttk.Label(self.tab1, textvariable=self.Plot_status).grid(column=1, row=2)
+        #Load File
+        ttk.Button(self.tab1, text="Load Presets from File", command=lambda: self.Select_Loadfile()).grid(column=1, row=3)
+
 
         # Settings Page
         ttk.Label(self.tab2, text="Save & Plot:", font=('Arial', 20), anchor='w').grid(column=0, row=0, pady=20,columnspan=3)
@@ -56,7 +60,7 @@ class GUI:
         self.parentdir = tk.StringVar()
         self.parentdir.set(self.calc.Settings.parentdir)
         ttk.Label(self.tab2, textvariable=self.parentdir, font=('Arial', 8)).grid(column=1, row=1, padx=5, pady=5,columnspan=2)
-        ttk.Button(self.tab2, text="Change", command=lambda: self.browseFiles()).grid(column=3, row=1, padx=5, pady=5)
+        ttk.Button(self.tab2, text="Change", command=lambda: self.Select_Directory()).grid(column=3, row=1, padx=5, pady=5)
         ttk.Label(self.tab2, text="Plotting angles (topdown: 90,90):", font=('Arial'), anchor='w').grid(column=0, row=2, pady=5,columnspan=3)
         ttk.Label(self.tab2,text="Elevation angle:").grid(column=0, row=3, pady=5)
         self.elev=tk.IntVar()
@@ -142,10 +146,9 @@ class GUI:
         ttk.Label(self.tab3, text="Transmissionfunction:").grid(column=0, row=6, pady=5)
         self.opt_transmission=tk.StringVar()
         self.opt_transmission.set(self.calc.OpticalElementData.oe_transmissionfunction)
-        ttk.Entry(self.tab3, textvariable=self.opt_transmission,width=100).grid(column=1, row=7, pady=5,columnspan=7)
+        ttk.Entry(self.tab3, textvariable=self.opt_transmission,width=100).grid(column=1, row=6, pady=5,columnspan=7)
         #apply button
-        ttk.Button(self.tab3, text="Apply Settings", command=lambda: self.ApplyChanges_OpticalElement()).grid( row=8, padx=5, pady=5,columnspan=7)
-
+        ttk.Button(self.tab3, text="Apply Settings", command=lambda: self.ApplyChanges_OpticalElement()).grid(row=8,padx=5,pady=5,columnspan=7)
         #Source Page
         #Sampling
         #Sampling Area
@@ -180,9 +183,18 @@ class GUI:
         #main loop
         self.root.mainloop()
 
-    def browseFiles(self):
-        self.parentdir.set(filedialog.askdirectory(initialdir=self.calc.Settings.parentdir, title="Select a File"))
-        print(self.parentdir.get())
+    def Select_Directory(self):
+        self.parentdir.set(filedialog.askdirectory(initialdir=self.calc.Settings.parentdir, title="Select a Folder"))
+        self.Plot_Button['state'] = tk.DISABLED
+
+    def Select_Loadfile(self):
+        try:
+            filepath=filedialog.askopenfile(initialdir=self.calc.Settings.parentdir, title="Select a Savefile").name
+            self.calc.Load_Data(filepath)
+            self.root.update()
+        except:
+            print("Error")
+
 
     def ApplyChanges_Settings(self):
         self.calc.Settings.parentdir=self.parentdir.get()
@@ -197,14 +209,16 @@ class GUI:
         self.calc.Settings.image_samplingarea[1][0]=self.image_samplingarea_ystart.get()
         self.calc.Settings.image_samplingarea[1][1]=self.image_samplingarea_yend.get()
         self.calc.Settings.image_coordinates[2]=self.image_coordinates_z.get()
+        self.Plot_Button['state'] = tk.DISABLED
 
     def ApplyChanges_OpticalElement(self):
         self.calc.OpticalElementData.oe_samplingarea[0][0]=self.opt_samplingarea_xstart.get()
         self.calc.OpticalElementData.oe_samplingarea[0][1]=self.opt_samplingarea_xend.get()
         self.calc.OpticalElementData.oe_samplingarea[1][0]=self.opt_samplingarea_ystart.get()
         self.calc.OpticalElementData.oe_samplingarea[1][1]=self.opt_samplingarea_yend.get()
-        self.calc.OpticalElementData.oe_coordinates[2]=self.opt_coordinates_z
+        self.calc.OpticalElementData.oe_coordinates[2]=self.opt_coordinates_z.get()
         self.calc.OpticalElementData.oe_transmissionfunction=self.opt_transmission.get()
+        self.Plot_Button['state'] = tk.DISABLED
 
     def ApplyChanges_Source(self):
         self.calc.SourceData.source_spectrum=self.source_spectralfunction.get()
@@ -212,7 +226,58 @@ class GUI:
         self.calc.SourceData.source_samplingarea[1]=self.source_xend.get()
         self.calc.SourceData.source_beam_radius=self.source_Beam_radius.get()
         self.calc.SourceData.source_curvature_radius=self.source_Beam_curveradius.get()
+        self.Plot_Button['state'] = tk.DISABLED
 
     def Plot_Button_enable(self):
         self.Plot_Button['state'] = tk.NORMAL
+
+
+    def Calculation_Button_start(self):
+        p = []
+        for i in range(0, self.calc.Settings.sampling_spectral_N):
+            self.Calculation_progressbartext.set("Calculating "+str(i)+" out of "+str(self.calc.Settings.sampling_spectral_N)+" Wavelengths")
+            self.root.update()
+            p.append(threading.Thread(target=self.calc.Calculate_for_Wavelength, args=(i, self.calc.Settings.sampling_OptOrRes)))
+            p[i].start()
+        self.Calculation_progressbartext.set("Waiting for calculations to finish")
+        self.root.update()
+        [pi.join() for pi in p]
+        self.Plot_Button_enable()
+        self.Calculation_progressbartext.set("Ready for Calculation")
+        self.Plot_status.set("Ready for Plotting")
+        self.root.update()
+
+    def Plot_Button_start(self):
+        "Plotting is started from here"
+        p=[]
+        for i in range(0, self.calc.Settings.sampling_spectral_N):
+            self.Plot_status.set("Plotting "+str(self.calc.calc_sampling_lambda[i]*10**9)+"nm")
+            self.root.update()
+            self.calc.Plot_Direction(i,self.calc.Settings.sampling_OptOrRes)
+            # Create Beamplots
+            self.calc.Plot_Beams(i)
+        # Plot Spectrum
+        self.Plot_status.set("Plotting Spectrum")
+        self.root.update()
+        self.calc.PlotSpectrum()
+        # Save Data
+        self.Plot_status.set("Saving Data")
+        self.root.update()
+        self.calc.SaveInputData()
+        self.calc.Save_Data()
+        self.Plot_status.set("Calculating Result")
+        self.root.update()
+        self.calc.Calculate_Coherence(self.calc.Settings.sampling_OptOrRes)
+        self.Plot_status.set("Plotting completed")
+        self.root.update()
+
+
+
+
+
+
+
+
+
+
 
