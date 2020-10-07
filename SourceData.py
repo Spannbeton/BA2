@@ -6,9 +6,10 @@ class SourceData:
         pass
     #Variables
     #Spectral function
-    source_spectrum="10000*sin(10000000*x)+1j*10000*cos(10000000*x)" #x means lambda
+    source_spectrum=4#"1/(2e-9*sqrt(6.28))*exp(-(1/2)*((x-650e-9)/2e-9)**2)*10**-8" #x means lambda
+
     #Samplingarea of spectral function (interval)
-    source_samplingarea=[400e-9,720e-9]
+    source_samplingarea=[640e-9,660e-9]
     #Beam Radius of source
     source_beam_radius=0.04
     #Radius of Curvature

@@ -28,8 +28,6 @@ class Calculation:
         self.SourceData=SourceData
         self.OpticalElementData=OpticalElementData
         self.Settings=Settings
-        #Create Folder to save plots
-        self.CreateFolder()
         #Lambda sampling step
         self.d_lambda_step=(SourceData.source_samplingarea[1]-SourceData.source_samplingarea[0])/(Settings.sampling_spectral_N-1)
         #x,y sampling step in accordance with FFT Restrictions in Resultplane
@@ -44,8 +42,11 @@ class Calculation:
         self.calc_sampling_E0=[None]*self.Settings.sampling_spectral_N #Field of Wavelength
         self.calc_Eopt_lambda_xy=numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1]]), dtype=complex) #optical Field
         self.calc_transmission_lambda_xy=numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1]]), dtype=complex)#transmission Matrix
-        self.calc_Eres_lambda_xy = numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1]]),dtype=complex) #resulting Field
+        self.calc_Eres_lambda_xy=numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1]]), dtype=complex) #result Field
+        self.calc_CoordsOPT_lambda_xy=numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1],2]), dtype=float)#coords optical
+        self.calc_CoordsRES_lambda_xy = numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1],2]),dtype=float)#coords res
         self.calc_IntensityResult=numpy.zeros([2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1],2]) #Resulting Intensity after coherence 0=Opt 1=Res
+        self.calc_Data=[]
 
 
 
@@ -59,9 +60,9 @@ class Calculation:
             os.mkdir(self.Directory +"/Beam Propagation/")
             os.mkdir(self.Directory + "/Data/")
         except: #For the case that folder already exists
-            print("Directory alreay exists")
+            print("Directory already exists")
 
-    def PlotSpectrum(self):
+    def Plot_Spectrum(self):
         "Plot the Spectrum in sampled Interval"
         fig=plt.figure()
         plt.title("Spectrum")
@@ -75,22 +76,28 @@ class Calculation:
             self.CreateFolder()
             plt.savefig(self.Directory)
         plt.close(fig)
-    def PrepareForIntensityPlot(self,E,dx,dy,x_start,y_start,wavelength,OptorRes):
-        "Prepares Plotting Data according to plane: (Fieldmatrix,x_step,y_step,x_start,y_start,wavelenght(iterator),Opt=True Res=False"
-        x,y,z=[],[],[]
-        #loop x
-        for i in range(E.shape[1]):
-            #loop y
-            for j in range(E.shape[2]):
-                x.append(x_start+i*dx)
-                y.append(y_start+j*dy)
-                z.append(numpy.real(numpy.complex(E[wavelength,i,j]*numpy.conjugate(E[wavelength,i,j]))))
-        #x,y,intensity
-        return [x,y,z,wavelength,OptorRes]
 
-    def PlotIntensity(self,xyzlambda_array):
+    def Plot_Intensity(self,wavelength,OptOrRes):
+        'Plots Intensity for a wavelength as iterator and opt=1/res=0 as bool'
         start=time.time()
-        x,y,z,l,OptOrRes=xyzlambda_array
+        l=wavelength
+        x=[]
+        y=[]
+        z=[]
+        for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            # loop y
+            for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                if OptOrRes:
+                    x.append(self.calc_CoordsOPT_lambda_xy[l][m][n][0])
+                    y.append(self.calc_CoordsOPT_lambda_xy[l][m][n][1])
+                    E=self.calc_Eopt_lambda_xy[l][m][n]
+                    z.append(numpy.real(E*numpy.conjugate(E)))
+
+                elif OptOrRes==False:
+                    x.append(self.calc_CoordsRES_lambda_xy[l][m][n][0])
+                    y.append(self.calc_CoordsRES_lambda_xy[l][m][n][1])
+                    E = self.calc_Eres_lambda_xy[l][m][n]
+                    z.append(numpy.real(E*numpy.conjugate(E)))
         z=numpy.array(z)
         fig = plt.figure()
         ax = Axes3D(fig,elev=self.Settings.plotting_angles[0],azim=self.Settings.plotting_angles[1])
@@ -98,13 +105,14 @@ class Calculation:
         ax.set_xlabel('x-axis (cm)', fontweight='bold')
         ax.set_ylabel('y-axis (cm)', fontweight='bold')
         ax.set_zlabel('Intensity', fontweight='bold')
-        ax.plot_trisurf([xi*100 for xi in x], [yi*100 for yi in y], z,cmap=cm.jet)
-        path=self.Directory +("/Intensity_OPT/" if OptOrRes else "/Intensity_RES/")+str(self.calc_sampling_lambda[l]*10**9)
+        ax.plot_trisurf([xi*100 for xi in x],[yi*100 for yi in y],z,cmap=cm.jet)
 
         try:
+            path = self.Directory + ("/Intensity_OPT/" if OptOrRes else "/Intensity_RES/") + str(self.calc_sampling_lambda[l] * 10 ** 9)
             plt.savefig(path+"nm.png")
         except:
             self.CreateFolder()
+            path = self.Directory + ("/Intensity_OPT/" if OptOrRes else "/Intensity_RES/") + str(self.calc_sampling_lambda[l] * 10 ** 9)
             plt.savefig(path+"nm.png")
         plt.close(fig)
         #Also save Raw Data to file
@@ -118,37 +126,6 @@ class Calculation:
         file.close()
         end=time.time()
         print(end-start)
-
-    def Plot_RecalculateCoordinatesFFT(self,xyzlambda_array):
-        "recalculate x,y from opt to res"
-        x,y,z,l,OptOrRes=xyzlambda_array
-        dist=self.Settings.image_coordinates[2]-self.OpticalElementData.oe_coordinates[2]
-        la=self.calc_sampling_lambda[l]
-        x=[self.RecalculateCoordinateFFT(xi,l) for xi in x]
-        y = [self.RecalculateCoordinateFFT(yi,l)for yi in y]
-        return [x,y,z,l,False]
-
-    def Plot_RecalculateCoordinatesFFT_inv(self,xyzlambda_array):
-        "recalculate x,y from res to opt"
-        x,y,z,l,OptOrRes=xyzlambda_array
-        dist=self.Settings.image_coordinates[2]-self.OpticalElementData.oe_coordinates[2]
-        la=self.calc_sampling_lambda[l]
-        x= [self.RecalculateCoordinateFFT_inv(xi,l) for xi in x]
-        y = [self.RecalculateCoordinateFFT_inv(yi,l) for yi in y]
-        return [x,y,z,l,True]
-
-    def RecalculateCoordinateFFT(self,coordinate,wavelength):
-        "recalculate the coordinate from opt to res, wavelength as iterator"
-        dist=self.Settings.image_coordinates[2]-self.OpticalElementData.oe_coordinates[2]
-        la=self.calc_sampling_lambda[wavelength]
-        return -coordinate*dist*la
-
-    def RecalculateCoordinateFFT_inv(self,coordinate,wavelength):
-        "recalculate the coordinate from res to opt, wavelength as iterator"
-        dist=self.Settings.image_coordinates[2]-self.OpticalElementData.oe_coordinates[2]
-        la=self.calc_sampling_lambda[wavelength]
-        return -coordinate/(dist*la)
-
 
     def Plot_Beams(self,wavelength):
         "Plot beam propagation in profile"
@@ -194,7 +171,7 @@ class Calculation:
         file=open(self.Directory+"/InputData.txt","w+")
         content=[]
         content.append("Source @z="+str(self.SourceData.source_coordinates[2])+" meters")
-        content.append("\nSpectrum function: "+self.SourceData.source_spectrum)
+        content.append("\nSpectrum function: "+str(self.SourceData.source_spectrum))
         content.append("\nSampled Interval: "+str(self.SourceData.source_samplingarea)+" meters")
         content.append("\nwith "+str(self.Settings.sampling_spectral_N)+" equidistant Points and a step of "+str(self.d_lambda_step)+" meters")
         content.append("\n\nGaussian Beam:")
@@ -241,21 +218,25 @@ class Calculation:
         k=(2*numpy.pi)/l
         res=0
         #if within area of optical element, otherwise set field to 0
-        if (x>=self.OpticalElementData.oe_samplingarea[0][0] and x <=self.OpticalElementData.oe_samplingarea[0][1] and y>=self.OpticalElementData.oe_samplingarea[1][0] and y<=self.OpticalElementData.oe_samplingarea[1][1]):
+        if True: #(x>=self.OpticalElementData.oe_samplingarea[0][0] and x <=self.OpticalElementData.oe_samplingarea[0][1] and y>=self.OpticalElementData.oe_samplingarea[1][0] and y<=self.OpticalElementData.oe_samplingarea[1][1]):
             frac=(1/complex(1+2j*z/(k*E_0**2)))
             e1=(E_0*(numpy.exp(1j*k*z))*frac)
-            e2=numpy.exp(-((x**2+y**2)*frac)/(W_0**2))
-            res= complex(e1*e2)
+            e2=numpy.exp(-((y**2)*frac)/(W_0**2))
+            e3=numpy.exp(-((x**2)*frac)/(W_0**2))
+            e4=(E_0*(numpy.exp(1j*k*z))*frac)*numpy.exp(-((x**2+y**2)*frac)/(W_0**2))
+            res= complex(e4)
         return res
 
-    def Calculate_for_Wavelength(self, wavelength, SampledArea):
-        "Calculates Field for Wavelength in optical plane wavelength as iterator, Sampled Area: Opt=true Res=False"
+    def Calculate_for_Wavelength(self, wavelength):
+        "Calculates Fields for both planes and writes into Data"
         i=wavelength
-        #distance of optical and image
-        dist = self.Settings.image_coordinates[2] - self.OpticalElementData.oe_coordinates[2]
+        #distances
+        dist_source_opt=self.OpticalElementData.oe_coordinates[2]
+        dist_opt_im = self.Settings.image_coordinates[2] - self.OpticalElementData.oe_coordinates[2]
         # Sample the Intensity function
         # Get Lambda
-        self.calc_sampling_lambda[i]=self.SourceData.source_samplingarea[0] + self.d_lambda_step * i
+        la=self.SourceData.source_samplingarea[0] + self.d_lambda_step * i
+        self.calc_sampling_lambda[i]=la
         # Offsets
         self.calc_sampling_offsets[i]=[0, 0, self.Calculate_z_offset(i)]
         # Waistrad
@@ -266,31 +247,35 @@ class Calculation:
         for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
             # loop y
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
-                # Calculate coordinates in optical plane
-                if SampledArea==True: #Case we are already in Optical Plane
-                    x,y =self.OpticalElementData.oe_samplingarea[0][0] + self.d_x_step_OPT * m,self.OpticalElementData.oe_samplingarea[1][0] + self.d_y_step_OPT * n
-                elif SampledArea==False: #Case we have to recalculate the coordinates
-                    x,y=self.RecalculateCoordinateFFT_inv(self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * m,i), self.RecalculateCoordinateFFT_inv(self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * n,i)
+                # Calculate coordinates in optical and result plane
+                self.calc_CoordsOPT_lambda_xy[i][m][n][0]=self.OpticalElementData.oe_samplingarea[0][0] + self.d_x_step_OPT * m
+                self.calc_CoordsOPT_lambda_xy[i][m][n][1]=self.OpticalElementData.oe_samplingarea[1][0] + self.d_y_step_OPT * n
+                self.calc_CoordsRES_lambda_xy[i][m][n][0]=self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * m
+                self.calc_CoordsRES_lambda_xy[i][m][n][1]=self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * n
                 # Calculate E(x,y,z_optic) in optical plane for each wavelength
-                self.calc_Eopt_lambda_xy[i, m, n] = self.Calculate_Field(i, x, y)
-                #Calculate transmission function
-                self.calc_transmission_lambda_xy[i, m, n] = self.OpticalElementData.oe_transmissionfunction_sympify.subs([["x", x], ["y", y]])
-                self.calc_Eres_lambda_xy[i,m,n]=self.calc_Eopt_lambda_xy[i, m, n]*numpy.fft.fftn(self.calc_transmission_lambda_xy[i, m, n])
-        pass
-
-    def Plot_Direction(self,wavelength,OptorRes):
-        "Plots for wavelength (as iterator) according to sampled plane Opt=True Res=False"
-        i=wavelength
-        if OptorRes: #Optical Case
-            # Create all the Intensityplots
-            self.PlotIntensity(self.PrepareForIntensityPlot(self.calc_Eopt_lambda_xy, self.d_x_step_OPT, self.d_y_step_OPT,self.OpticalElementData.oe_samplingarea[0][0],self.OpticalElementData.oe_samplingarea[1][0], i,OptorRes))
-            # Create all the Resultplots
-            self.PlotIntensity(self.Plot_RecalculateCoordinatesFFT(self.PrepareForIntensityPlot(self.calc_Eres_lambda_xy, self.d_x_step_OPT, self.d_y_step_OPT,self.OpticalElementData.oe_samplingarea[0][0],self.OpticalElementData.oe_samplingarea[1][0], i,OptorRes)))
-        else: #Resultcase
-            # Create all the Intensityplots
-            self.PlotIntensity(self.Plot_RecalculateCoordinatesFFT_inv(self.PrepareForIntensityPlot(self.calc_Eopt_lambda_xy, self.d_x_step_RES, self.d_y_step_RES,self.Settings.image_samplingarea[0][0],self.Settings.image_samplingarea[1][0], i ,OptorRes)))
-            # Create all the Resultplots
-            self.PlotIntensity(self.PrepareForIntensityPlot(self.calc_Eres_lambda_xy, self.d_x_step_RES, self.d_y_step_RES,self.Settings.image_samplingarea[0][0],self.Settings.image_samplingarea[1][0], i,OptorRes))
+                self.calc_Eopt_lambda_xy[i,m,n]=self.Calculate_Field(i,self.calc_CoordsOPT_lambda_xy[i][m][n][0],self.calc_CoordsOPT_lambda_xy[i][m][n][1])
+        #calculate E in resultplane
+        #Calculate resulting Field
+        E=0
+        print("calculating E_res")
+        calc_uv = lambda w1, w2: ((w1 / dist_source_opt) + (w2 / dist_opt_im)) * (1 / la)
+        u=[]
+        v=[]
+        #calculate u and v
+        for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            u=(numpy.fft.fftshift([calc_uv(self.calc_CoordsOPT_lambda_xy[i][k][0][0], self.calc_CoordsRES_lambda_xy[i][m][0][0]) for k in range(0, 2 ** self.Settings.sampling_FFT_N[0])]))
+        for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+            v=(numpy.fft.fftshift([calc_uv(self.calc_CoordsOPT_lambda_xy[i][k][0][1], self.calc_CoordsRES_lambda_xy[i][m][0][1]) for k in range(0, 2 ** self.Settings.sampling_FFT_N[1])]))
+        #Transmission Matrix
+        for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                self.calc_transmission_lambda_xy[i][m][m]=numpy.fft.fftn(self.OpticalElementData.oe_transmissionfunction_sympify.subs((["x",u[n]],["l",la],["y",v[0]]),evaluate=True))
+        #calculate Results for each xy
+        for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            # loop y
+            for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                # maybe also put coherence constant here
+                self.calc_Eres_lambda_xy[i][m][n]=self.calc_Eopt_lambda_xy[i,m,n]*self.calc_transmission_lambda_xy[i,m,n]
 
     def Calculate_Coherence(self,OptorRes):
         "Calculate coherence in given plane Opt=True Res=False "
@@ -301,13 +286,11 @@ class Calculation:
         x=[]
         y=[]
         z=[]
-
         for n in range(2 ** self.Settings.sampling_FFT_N[0]):#loop x
             for m in range(2 ** self.Settings.sampling_FFT_N[1]):#loop y
                 for i in range(self.Settings.sampling_spectral_N):
                     # no coherence
                     self.calc_IntensityResult[n,m,int(OptorRes)]+= numpy.real(E[i,n,m]*numpy.complex.conjugate(E[i,n,m]))
-
                 # get coordinates
                 x.append(self.OpticalElementData.oe_samplingarea[0][0] + self.d_x_step_OPT * n if OptorRes else self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * n)
                 y.append(self.OpticalElementData.oe_samplingarea[1][0] + self.d_y_step_OPT * m  if OptorRes else self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * m)
@@ -338,47 +321,53 @@ class Calculation:
             content.append("\n"+str([x[i],y[i],z[i]]))
         file.writelines(content)
         file.close()
-        pass
-
     def Calculation(self):
         "Main Calculation Function-Legacy Console based version"
+        start = time.time()
         p=[]
         for i in range (0,self.Settings.sampling_spectral_N):
-            p.append(threading.Thread(target=self.Calculate_for_Wavelength,args=(i,self.Settings.sampling_OptOrRes)))
+            p.append(threading.Thread(target=self.Calculate_for_Wavelength,args=(i,)))
             p[i].start()
-            #print("Calculating " + str(self.calc_sampling_lambda[i] * 10 ** 9) + "nm")
         [pi.join() for pi in p]
-        print("Calculation done")
+        end = time.time()
+        print("Calculation done in "+str(end-start))
 
 
     def Plot_All_SaveAll(self):
         "Main Plotting function-Legacy Console based version"
+        self.CreateFolder()
         p=[]
         for i in range(0, self.Settings.sampling_spectral_N):
             print("Plotting "+str(self.calc_sampling_lambda[i]*10**9)+"nm")
-            self.Plot_Direction(i,self.Settings.sampling_OptOrRes)
+            #plot Optical
+            self.Plot_Intensity(i,True)
+            #plot Result
+            self.Plot_Intensity(i, False)
             # Create Beamplots
             self.Plot_Beams(i)
         # Plot Spectrum
         print("Plotting Spectrum")
-        self.PlotSpectrum()
+        self.Plot_Spectrum()
         # Save Data
         print("Saving Data")
         self.SaveInputData()
         self.Save_Data()
         print("Calculating Result")
-        self.Calculate_Coherence(self.Settings.sampling_OptOrRes)
+        #self.Calculate_Coherence(self.Settings.sampling_OptOrRes)
 
     def Save_Data(self):
         "Save SourceData,OpticalElementData,Settings"
-        path=self.Directory+"/Data"
+        try:
+            path=self.Directory+"/Data"
+        except:
+            self.CreateFolder()
+            path = self.Directory + "/Data"
         datafile = open(path+"/SaveData.obj","wb+")
         pickle.dump([self.SourceData,self.OpticalElementData,self.Settings], datafile)
 
     def Load_Data(self,path):
-        "Load SourceData,OpticalElementData,Settings from file"
+        "Load SourceData,OpticalElementData,Settings from file -Legacy Console based version"
         datafile = open(path, 'rb')
-        Data=Calculation(self.SourceData,self.OpticalElementData,self.Settings)
         Data = pickle.load(datafile)
         self.SourceData=Data[0]
         self.OpticalElementData=Data[1]

@@ -5,11 +5,11 @@ class OpticalElementData:
     def __init__(self):
         pass
     #Variables
-    oe_transmissionfunction=1#"-sin(1000000*x)"
+    oe_transmissionfunction=1#"-sin(1000000*x*y*l)"
     #Coordinates of Optical Element
-    oe_coordinates=[0,0,0.2]
+    oe_coordinates=[0,0,0.05]
     #Area that should be sampled (geometry) Default only x,y values needed, z for further upgrades
-    oe_samplingarea=[[-0.04,0.04],[-0.04,0.04],[0,0]]
+    oe_samplingarea=[[-0.0000025,0.0000025],[-0.0000025,0.0000025],[0,0]]
     def calculate(self):
         self.oe_transmissionfunction_sympify=sympify(self.oe_transmissionfunction)
 

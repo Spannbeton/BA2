@@ -7,6 +7,7 @@ from tkinter import ttk
 from tkinter import filedialog
 import threading
 import time
+import pickle
 
 class GUI:
     def __init__(self):
@@ -44,14 +45,18 @@ class GUI:
         self.Calculation_progressbartext.set("Ready for Calculation")
         ttk.Label(self.tab1, textvariable=self.Calculation_progressbartext).grid(column=1, row=1)
         #Plotting
-        self.Plot_Button=ttk.Button(self.tab1, text="Plot", command=lambda:self.Plot_Button_start(),state=tk.DISABLED)
+        self.Plot_Button=ttk.Button(self.tab1, text="Plot&Save ", command=lambda:self.Plot_Button_start(),state=tk.DISABLED)
         self.Plot_Button.grid(column=0, row=2, padx=5, pady=5)
         #Text Plotting
         self.Plot_status=tk.StringVar()
         self.Plot_status.set("Calculation required")
         ttk.Label(self.tab1, textvariable=self.Plot_status).grid(column=1, row=2)
+        #Save
+        ttk.Label(self.tab1, text="Save & Load Presets:", font=('Arial', 20), anchor='w').grid(column=0, row=3,pady=20, columnspan=3)
+
+        ttk.Button(self.tab1, text="Save Presets", command=lambda: self.calc.Save_Data()).grid(column=0,row=4)
         #Load File
-        ttk.Button(self.tab1, text="Load Presets from File", command=lambda: self.Select_Loadfile()).grid(column=1, row=3)
+        ttk.Button(self.tab1, text="Load Presets from File", command=lambda: self.Select_Loadfile()).grid(column=1, row=4)
 
 
         # Settings Page
@@ -191,6 +196,7 @@ class GUI:
         try:
             filepath=filedialog.askopenfile(initialdir=self.calc.Settings.parentdir, title="Select a Savefile").name
             self.calc.Load_Data(filepath)
+            self.Update_Variables()
             self.root.update()
         except:
             print("Error")
@@ -270,6 +276,41 @@ class GUI:
         self.calc.Calculate_Coherence(self.calc.Settings.sampling_OptOrRes)
         self.Plot_status.set("Plotting completed")
         self.root.update()
+
+    def Update_Variables(self):
+        # Settings Page
+        self.parentdir.set(self.calc.Settings.parentdir)
+        self.elev.set(self.calc.Settings.plotting_angles[0])
+        self.azimuth.set(self.calc.Settings.plotting_angles[1])
+        self.Combobox_OptOrRes.current(int(self.calc.Settings.sampling_OptOrRes))
+        # Samplingarea with Entry
+        self.image_samplingarea_xstart.set(self.calc.Settings.image_samplingarea[0][0])
+        self.image_samplingarea_xend.set(self.calc.Settings.image_samplingarea[0][1])
+        self.image_samplingarea_ystart.set(self.calc.Settings.image_samplingarea[1][0])
+        self.image_samplingarea_yend.set(self.calc.Settings.image_samplingarea[1][1])
+        self.FFT_Nx.set(self.calc.Settings.sampling_FFT_N[0])
+        self.FFT_Ny.set(self.calc.Settings.sampling_FFT_N[1])
+        # Lambdasampling with Entry
+        self.sampling_lambda.set(self.calc.Settings.sampling_spectral_N)
+        self.image_coordinates_z.set(self.calc.Settings.image_coordinates[2])
+        # Optical Element Page
+        # Sampling Area
+        self.opt_samplingarea_xstart.set(self.calc.OpticalElementData.oe_samplingarea[0][0])
+        self.opt_samplingarea_xend.set(self.calc.OpticalElementData.oe_samplingarea[0][1])
+        self.opt_samplingarea_ystart.set(self.calc.OpticalElementData.oe_samplingarea[1][0])
+        self.opt_samplingarea_yend.set(self.calc.OpticalElementData.oe_samplingarea[1][1])
+        self.opt_coordinates_z.set(self.calc.OpticalElementData.oe_coordinates[2])
+        self.opt_transmission.set(self.calc.OpticalElementData.oe_transmissionfunction)
+        # Source Page
+        self.source_spectralfunction.set(self.calc.SourceData.source_spectrum)
+        self.source_xstart.set(self.calc.SourceData.source_samplingarea[0])
+        self.source_xend.set(self.calc.SourceData.source_samplingarea[1])
+        self.source_Beam_radius.set(self.calc.SourceData.source_beam_radius)
+        self.source_Beam_curveradius.set(self.calc.SourceData.source_curvature_radius)
+
+
+
+
 
 
 
