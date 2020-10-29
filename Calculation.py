@@ -84,20 +84,23 @@ class Calculation:
         x=[]
         y=[]
         z=[]
+        E=[]
         for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
             # loop y
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
                 if OptOrRes:
                     x.append(self.calc_CoordsOPT_lambda_xy[l][m][n][0])
                     y.append(self.calc_CoordsOPT_lambda_xy[l][m][n][1])
-                    E=self.calc_Eopt_lambda_xy[l][m][n]
-                    z.append(numpy.real(E*numpy.conjugate(E)))
+                    F=self.calc_Eopt_lambda_xy[l][m][n]
+                    E.append(F)
+                    z.append(numpy.real(F*numpy.conjugate(F)))
 
                 elif OptOrRes==False:
                     x.append(self.calc_CoordsRES_lambda_xy[l][m][n][0])
                     y.append(self.calc_CoordsRES_lambda_xy[l][m][n][1])
-                    E = self.calc_Eres_lambda_xy[l][m][n]
-                    z.append(numpy.real(E*numpy.conjugate(E)))
+                    F=self.calc_Eres_lambda_xy[l][m][n]
+                    E.append(F)
+                    z.append(numpy.real(F * numpy.conjugate(F)))
         z=numpy.array(z)
         fig = plt.figure()
         ax = Axes3D(fig,elev=self.Settings.plotting_angles[0],azim=self.Settings.plotting_angles[1])
@@ -119,9 +122,9 @@ class Calculation:
         file = open(path+"nm.txt","w+")
         content = []
         content.append("Intensity Vectors for wavelength "+str(self.calc_sampling_lambda[l]*10**9)+"nm in "+("optical plane" if OptOrRes else "result plane"))
-        content.append("\nVector Format [x,y,Intensity]")
+        content.append("\nVector Format [x,y,Field,Intensity]")
         for i in range(len(x)):
-            content.append("\n"+str([x[i],y[i],z[i]]))
+            content.append("\n"+str([x[i],5,y[i],round(E[i],2),round(z[i],2)]))
         file.writelines(content)
         file.close()
         end=time.time()
@@ -135,7 +138,7 @@ class Calculation:
         axes.set_xlim(zlim)
         plt.title("Beam Propagation for \u03BB="+str(round(self.calc_sampling_lambda[wavelength]*10**9,2))+" nm \n \u03C9_0="+str(round(self.calc_sampling_waistrad[wavelength]*1000,2))+"mm @z="+str(round(self.calc_sampling_offsets[wavelength][2]*100,2))+"cm")
         plt.xlabel("z-Axis (m)")
-        plt.ylabel("Radius (cm)")
+        plt.ylabel("Beam width (cm)")
         plt.axvline(self.SourceData.source_coordinates[2] ,label="Source",linewidth=4,color="Red")
         #plt.text(self.SourceData.source_coordinates[2],0,"Source")
         plt.axvline(self.calc_sampling_offsets[wavelength][2], label="Waist of Beam",linestyle=":",linewidth=2)
@@ -145,9 +148,12 @@ class Calculation:
         plt.axvline(self.Settings.image_coordinates[2], label="Result plane",linewidth=4)
         #plt.text(self.Settings.image_coordinates[2],0,"Result plane")
         #Add hyperbolic function for the beam
-        z_1 = numpy.linspace(self.SourceData.source_coordinates[2], self.OpticalElementData.oe_coordinates[2],50)
-        z_2 = numpy.linspace(self.OpticalElementData.oe_coordinates[2], self.Settings.image_coordinates[2],50)
-        wz=lambda z:100*(self.calc_sampling_waistrad[wavelength]*(1+((z-self.calc_sampling_offsets[wavelength][2])/((numpy.pi*self.calc_sampling_waistrad[wavelength]**2)/self.calc_sampling_lambda[wavelength]))**2)**0.5)
+        z_1 = numpy.linspace(self.SourceData.source_coordinates[2], self.OpticalElementData.oe_coordinates[2],50) #50 from source to optical
+        z_2 = numpy.linspace(self.OpticalElementData.oe_coordinates[2], self.Settings.image_coordinates[2],50) # 50 from optical to image
+        Z_r = numpy.pi * self.calc_sampling_waistrad[wavelength] ** 2 / self.calc_sampling_lambda[wavelength]
+        #wz=lambda z:100*(self.calc_sampling_waistrad[wavelength]*(1+(((z-self.calc_sampling_offsets[wavelength][2])*self.calc_sampling_lambda[wavelength])/((numpy.pi*self.calc_sampling_waistrad[wavelength]**2)))**2)**0.5)
+        wz = lambda z: 100*self.calc_sampling_waistrad[wavelength]*(1+((z-self.calc_sampling_offsets[wavelength][2])/Z_r)**2)**0.5
+
         radii_1=[wz(k) for k in z_1]
         radii_2=[wz(k) for k in z_2]
         #to optical plane
@@ -197,7 +203,7 @@ class Calculation:
         l=self.calc_sampling_lambda[wavelength]
         R=self.SourceData.source_curvature_radius
         W=self.SourceData.source_beam_radius
-        res=R/((1+(numpy.pi*(W**2)/(l*R))**2)**0.5)
+        res=R/((1+(numpy.pi*(W**2)/(l*R))**-2)**0.5)
         return res
 
     def Calculate_Waistrad(self,wavelength):#as iterator
@@ -206,7 +212,7 @@ class Calculation:
         l=self.calc_sampling_lambda[wavelength]
         R=self.SourceData.source_curvature_radius
         W=self.SourceData.source_beam_radius
-        res=W/((1+(l*R/(numpy.pi*(W**2)))**2)**0.5)
+        res=W/((1+(l*R/(numpy.pi*(W**2)))**-2)**0.5)
         return res
 
     def Calculate_Field(self,wavelength,x,y):#wavelength as iterator, x,y as value
@@ -228,7 +234,10 @@ class Calculation:
         return res
 
     def Calculate_for_Wavelength(self, wavelength):
+        print("Starting calculation")
         "Calculates Fields for both planes and writes into Data"
+        #koherence Constant
+        C=1
         i=wavelength
         #distances
         dist_source_opt=self.OpticalElementData.oe_coordinates[2]
@@ -248,35 +257,41 @@ class Calculation:
             # loop y
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
                 # Calculate coordinates in optical and result plane
-                self.calc_CoordsOPT_lambda_xy[i][m][n][0]=self.OpticalElementData.oe_samplingarea[0][0] + self.d_x_step_OPT * m
-                self.calc_CoordsOPT_lambda_xy[i][m][n][1]=self.OpticalElementData.oe_samplingarea[1][0] + self.d_y_step_OPT * n
-                self.calc_CoordsRES_lambda_xy[i][m][n][0]=self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * m
-                self.calc_CoordsRES_lambda_xy[i][m][n][1]=self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * n
+                self.calc_CoordsOPT_lambda_xy[i][m][n][0]=self.OpticalElementData.oe_samplingarea[0][0] + self.d_x_step_OPT * m #x
+                self.calc_CoordsOPT_lambda_xy[i][m][n][1]=self.OpticalElementData.oe_samplingarea[1][0] + self.d_y_step_OPT * n #y
+                self.calc_CoordsRES_lambda_xy[i][m][n][0]=self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * m #x
+                self.calc_CoordsRES_lambda_xy[i][m][n][1]=self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * n #y
                 # Calculate E(x,y,z_optic) in optical plane for each wavelength
                 self.calc_Eopt_lambda_xy[i,m,n]=self.Calculate_Field(i,self.calc_CoordsOPT_lambda_xy[i][m][n][0],self.calc_CoordsOPT_lambda_xy[i][m][n][1])
         #calculate E in resultplane
         #Calculate resulting Field
-        E=0
         print("calculating E_res")
-        calc_uv = lambda w1, w2: ((w1 / dist_source_opt) + (w2 / dist_opt_im)) * (1 / la)
-        u=[]
-        v=[]
-        #calculate u and v
-        for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
-            u=(numpy.fft.fftshift([calc_uv(self.calc_CoordsOPT_lambda_xy[i][k][0][0], self.calc_CoordsRES_lambda_xy[i][m][0][0]) for k in range(0, 2 ** self.Settings.sampling_FFT_N[0])]))
-        for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
-            v=(numpy.fft.fftshift([calc_uv(self.calc_CoordsOPT_lambda_xy[i][k][0][1], self.calc_CoordsRES_lambda_xy[i][m][0][1]) for k in range(0, 2 ** self.Settings.sampling_FFT_N[1])]))
+        phaseshift= lambda l,x,u,y,v:numpy.exp((2j*numpy.pi/l)*((x-u)**2+(y-v)**2)**0.5)
         #Transmission Matrix
         for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
-                self.calc_transmission_lambda_xy[i][m][m]=numpy.fft.fftn(self.OpticalElementData.oe_transmissionfunction_sympify.subs((["x",u[n]],["l",la],["y",v[0]]),evaluate=True))
+                x=self.calc_CoordsOPT_lambda_xy[i][m][n][0]
+                y=self.calc_CoordsOPT_lambda_xy[i][m][n][1]
+                self.calc_transmission_lambda_xy[i][m][n]=self.OpticalElementData.oe_transmissionfunction_sympify.subs((["x",x],["l",la],["y",y]),evaluate=True)
         #calculate Results for each xy
-        for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
-            # loop y
-            for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
-                # maybe also put coherence constant here
-                self.calc_Eres_lambda_xy[i][m][n]=self.calc_Eopt_lambda_xy[i,m,n]*self.calc_transmission_lambda_xy[i,m,n]
-
+        for u_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            for v_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                u = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][0]
+                v = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][0]
+                res=0
+                for x_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+                # loop y
+                    for y_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                        x=self.calc_CoordsOPT_lambda_xy[i][x_i][y_i][0]
+                        y=self.calc_CoordsOPT_lambda_xy[i][x_i][y_i][1]
+                        ps=phaseshift(la,x,u,y,v)
+                        trami=self.calc_transmission_lambda_xy[i][x_i][y_i]
+                        res+=C*numpy.fft.fftn(self.calc_Eopt_lambda_xy[i,x_i,y_i]*self.calc_transmission_lambda_xy[i][x_i][y_i]*ps)
+                        k=""
+                        # maybe also put coherence constant here
+                self.calc_Eres_lambda_xy[i][u_i][v_i]=res
+        #fftshift
+        self.calc_Eres_lambda_xy[i][:][:]=numpy.fft.fftshift(self.calc_Eres_lambda_xy[i][:][:])
     def Calculate_Coherence(self,OptorRes):
         "Calculate coherence in given plane Opt=True Res=False "
         #needs 4 cases no coherence, just temporal, just spatial, both

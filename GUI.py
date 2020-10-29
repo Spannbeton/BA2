@@ -43,14 +43,14 @@ class GUI:
         #Text Plotting
         self.Calculation_progressbartext = tk.StringVar()
         self.Calculation_progressbartext.set("Ready for Calculation")
-        ttk.Label(self.tab1, textvariable=self.Calculation_progressbartext).grid(column=1, row=1)
+        ttk.Label(self.tab1, textvariable=self.Calculation_progressbartext).grid(column=1, row=1,columnspan=3)
         #Plotting
         self.Plot_Button=ttk.Button(self.tab1, text="Plot&Save ", command=lambda:self.Plot_Button_start(),state=tk.DISABLED)
         self.Plot_Button.grid(column=0, row=2, padx=5, pady=5)
         #Text Plotting
         self.Plot_status=tk.StringVar()
         self.Plot_status.set("Calculation required")
-        ttk.Label(self.tab1, textvariable=self.Plot_status).grid(column=1, row=2)
+        ttk.Label(self.tab1, textvariable=self.Plot_status).grid(column=1, row=2,columnspan=3)
         #Save
         ttk.Label(self.tab1, text="Save & Load Presets:", font=('Arial', 20), anchor='w').grid(column=0, row=3,pady=20, columnspan=3)
 
@@ -76,10 +76,12 @@ class GUI:
         ttk.Label(self.tab2, text="Azimuth:").grid(column=2, row=3, pady=5)
         ttk.Entry(self.tab2, textvariable=self.azimuth).grid(column=3, row=3, pady=5)
         ttk.Label(self.tab2, text="Sampling:", font=('Arial', 20)).grid(column=0, row=4, pady=20, columnspan=2)
+        ''' Not Needed
         ttk.Label(self.tab2, text="Which plane to sample:").grid(column=0, row=5, pady=5, columnspan=2) #Combobox Which plane
         self.Combobox_OptOrRes=ttk.Combobox(self.tab2,values=["result","optical"])
         self.Combobox_OptOrRes.grid(column=3,row=5,pady=5)
         self.Combobox_OptOrRes.current(int(self.calc.Settings.sampling_OptOrRes))
+        '''
         # Samplingarea with Entry
         self.image_samplingarea_xstart=tk.DoubleVar()
         self.image_samplingarea_xend = tk.DoubleVar()
@@ -243,7 +245,7 @@ class GUI:
         for i in range(0, self.calc.Settings.sampling_spectral_N):
             self.Calculation_progressbartext.set("Calculating "+str(i)+" out of "+str(self.calc.Settings.sampling_spectral_N)+" Wavelengths")
             self.root.update()
-            p.append(threading.Thread(target=self.calc.Calculate_for_Wavelength, args=(i, self.calc.Settings.sampling_OptOrRes)))
+            p.append(threading.Thread(target=self.calc.Calculate_for_Wavelength, args=(i,)))
             p[i].start()
         self.Calculation_progressbartext.set("Waiting for calculations to finish")
         self.root.update()
@@ -255,27 +257,26 @@ class GUI:
 
     def Plot_Button_start(self):
         "Plotting is started from here"
+        self.calc.CreateFolder()
         p=[]
         for i in range(0, self.calc.Settings.sampling_spectral_N):
-            self.Plot_status.set("Plotting "+str(self.calc.calc_sampling_lambda[i]*10**9)+"nm")
+            self.Plot_status.set("Plotting "+str(round(self.calc.calc_sampling_lambda[i]*10**9))+"nm")
             self.root.update()
-            self.calc.Plot_Direction(i,self.calc.Settings.sampling_OptOrRes)
+            #plot Optical
+            self.calc.Plot_Intensity(i,True)
+            #plot Result
+            self.calc.Plot_Intensity(i, False)
             # Create Beamplots
             self.calc.Plot_Beams(i)
         # Plot Spectrum
         self.Plot_status.set("Plotting Spectrum")
-        self.root.update()
-        self.calc.PlotSpectrum()
+        self.calc.Plot_Spectrum()
         # Save Data
         self.Plot_status.set("Saving Data")
-        self.root.update()
         self.calc.SaveInputData()
         self.calc.Save_Data()
         self.Plot_status.set("Calculating Result")
-        self.root.update()
-        self.calc.Calculate_Coherence(self.calc.Settings.sampling_OptOrRes)
-        self.Plot_status.set("Plotting completed")
-        self.root.update()
+        #self.Calculate_Coherence(self.Settings.sampling_OptOrRes)
 
     def Update_Variables(self):
         # Settings Page

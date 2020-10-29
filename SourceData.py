@@ -10,9 +10,9 @@ class SourceData:
 
     #Samplingarea of spectral function (interval)
     source_samplingarea=[640e-9,660e-9]
-    #Beam Radius of source
-    source_beam_radius=0.04
-    #Radius of Curvature
+    #Beam Radius of source in m
+    source_beam_radius=0.001
+    #Radius of Curvature in m
     source_curvature_radius=100
     #coordinates (defaults to 0,0,0), needed for further upgrades
     source_coordinates=[0,0,0]
