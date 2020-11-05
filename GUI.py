@@ -76,12 +76,7 @@ class GUI:
         ttk.Label(self.tab2, text="Azimuth:").grid(column=2, row=3, pady=5)
         ttk.Entry(self.tab2, textvariable=self.azimuth).grid(column=3, row=3, pady=5)
         ttk.Label(self.tab2, text="Sampling:", font=('Arial', 20)).grid(column=0, row=4, pady=20, columnspan=2)
-        ''' Not Needed
-        ttk.Label(self.tab2, text="Which plane to sample:").grid(column=0, row=5, pady=5, columnspan=2) #Combobox Which plane
-        self.Combobox_OptOrRes=ttk.Combobox(self.tab2,values=["result","optical"])
-        self.Combobox_OptOrRes.grid(column=3,row=5,pady=5)
-        self.Combobox_OptOrRes.current(int(self.calc.Settings.sampling_OptOrRes))
-        '''
+
         # Samplingarea with Entry
         self.image_samplingarea_xstart=tk.DoubleVar()
         self.image_samplingarea_xend = tk.DoubleVar()
@@ -163,7 +158,11 @@ class GUI:
         ttk.Label(self.tab4, text="Spectral function for wavelength as x:").grid(column=0, row=1, pady=5)
         self.source_spectralfunction=tk.StringVar()
         self.source_spectralfunction.set(self.calc.SourceData.source_spectrum)
-        ttk.Entry(self.tab4, textvariable=self.source_spectralfunction, width=100).grid(column=1, row=2, pady=5, columnspan=7)
+        ttk.Entry(self.tab4, textvariable=self.source_spectralfunction, width=100).grid(column=1, row=1, pady=5, columnspan=7)
+        self.source_coherencelength=tk.DoubleVar()
+        self.source_coherencelength.set(self.calc.SourceData.source_coherencelength)
+        ttk.Label(self.tab4, text="Coherence length of source:").grid(column=0, row=2, pady=5)
+        ttk.Entry(self.tab4, textvariable=self.source_coherencelength, width=100).grid(column=1, row=2, pady=5,columnspan=3)
         ttk.Label(self.tab4, text="Sampling Interval from ").grid(column=0, row=3, pady=5)
         self.source_xstart=tk.DoubleVar()
         self.source_xend=tk.DoubleVar()
@@ -234,6 +233,7 @@ class GUI:
         self.calc.SourceData.source_samplingarea[1]=self.source_xend.get()
         self.calc.SourceData.source_beam_radius=self.source_Beam_radius.get()
         self.calc.SourceData.source_curvature_radius=self.source_Beam_curveradius.get()
+        self.calc.SourceData.source_coherencelength=self.source_coherencelength.get()
         self.Plot_Button['state'] = tk.DISABLED
 
     def Plot_Button_enable(self):
@@ -276,7 +276,7 @@ class GUI:
         self.calc.SaveInputData()
         self.calc.Save_Data()
         self.Plot_status.set("Calculating Result")
-        #self.Calculate_Coherence(self.Settings.sampling_OptOrRes)
+        self.calc.Calculate_Result()
 
     def Update_Variables(self):
         # Settings Page

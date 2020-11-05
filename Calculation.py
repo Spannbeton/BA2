@@ -45,7 +45,7 @@ class Calculation:
         self.calc_Eres_lambda_xy=numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1]]), dtype=complex) #result Field
         self.calc_CoordsOPT_lambda_xy=numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1],2]), dtype=float)#coords optical
         self.calc_CoordsRES_lambda_xy = numpy.zeros(([Settings.sampling_spectral_N, 2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1],2]),dtype=float)#coords res
-        self.calc_IntensityResult=numpy.zeros([2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1],2]) #Resulting Intensity after coherence 0=Opt 1=Res
+        self.calc_IntensityResult=numpy.zeros([2 ** Settings.sampling_FFT_N[0], 2 ** Settings.sampling_FFT_N[1]]) #Resulting Intensity after coherence 0=Opt 1=Res
         self.calc_Data=[]
 
 
@@ -151,7 +151,6 @@ class Calculation:
         z_1 = numpy.linspace(self.SourceData.source_coordinates[2], self.OpticalElementData.oe_coordinates[2],50) #50 from source to optical
         z_2 = numpy.linspace(self.OpticalElementData.oe_coordinates[2], self.Settings.image_coordinates[2],50) # 50 from optical to image
         Z_r = numpy.pi * self.calc_sampling_waistrad[wavelength] ** 2 / self.calc_sampling_lambda[wavelength]
-        #wz=lambda z:100*(self.calc_sampling_waistrad[wavelength]*(1+(((z-self.calc_sampling_offsets[wavelength][2])*self.calc_sampling_lambda[wavelength])/((numpy.pi*self.calc_sampling_waistrad[wavelength]**2)))**2)**0.5)
         wz = lambda z: 100*self.calc_sampling_waistrad[wavelength]*(1+((z-self.calc_sampling_offsets[wavelength][2])/Z_r)**2)**0.5
 
         radii_1=[wz(k) for k in z_1]
@@ -200,19 +199,25 @@ class Calculation:
     def Calculate_z_offset(self,wavelength):#as iterator
         "wavelength as iterator"
         #get wavelength
+        '''
         l=self.calc_sampling_lambda[wavelength]
         R=self.SourceData.source_curvature_radius
         W=self.SourceData.source_beam_radius
         res=R/((1+(numpy.pi*(W**2)/(l*R))**-2)**0.5)
+        '''
+        res=10
         return res
 
     def Calculate_Waistrad(self,wavelength):#as iterator
         "wavelength as iterator"
         #get wavelength
+        '''
         l=self.calc_sampling_lambda[wavelength]
         R=self.SourceData.source_curvature_radius
         W=self.SourceData.source_beam_radius
         res=W/((1+(l*R/(numpy.pi*(W**2)))**-2)**0.5)
+        '''
+        res=0.01
         return res
 
     def Calculate_Field(self,wavelength,x,y):#wavelength as iterator, x,y as value
@@ -236,7 +241,9 @@ class Calculation:
     def Calculate_for_Wavelength(self, wavelength):
         print("Starting calculation")
         "Calculates Fields for both planes and writes into Data"
-        #koherence Constant
+        #coherence length
+        L=self.SourceData.source_coherencelength
+        #scaling factor
         C=1
         i=wavelength
         #distances
@@ -267,6 +274,8 @@ class Calculation:
         #Calculate resulting Field
         print("calculating E_res")
         phaseshift= lambda l,x,u,y,v:numpy.exp((2j*numpy.pi/l)*((x-u)**2+(y-v)**2)**0.5)
+        coherencefactor=lambda l,x,u,y,v:numpy.exp(-((x-u)**2+(y-v)**2)/L**2)
+
         #Transmission Matrix
         for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
@@ -275,28 +284,28 @@ class Calculation:
                 self.calc_transmission_lambda_xy[i][m][n]=self.OpticalElementData.oe_transmissionfunction_sympify.subs((["x",x],["l",la],["y",y]),evaluate=True)
         #calculate Results for each xy
         for u_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+
             for v_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
                 u = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][0]
-                v = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][0]
+                v = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][1]
                 res=0
                 for x_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
                 # loop y
                     for y_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
-                        x=self.calc_CoordsOPT_lambda_xy[i][x_i][y_i][0]
-                        y=self.calc_CoordsOPT_lambda_xy[i][x_i][y_i][1]
-                        ps=phaseshift(la,x,u,y,v)
+                        x = self.calc_CoordsOPT_lambda_xy[i][x_i][y_i][0]
+                        y = self.calc_CoordsOPT_lambda_xy[i][x_i][y_i][1]
+                        ps = phaseshift(la, y, v, x, u)
+                        cf=coherencefactor(la, y, v, x, u)
                         trami=self.calc_transmission_lambda_xy[i][x_i][y_i]
-                        res+=C*numpy.fft.fftn(self.calc_Eopt_lambda_xy[i,x_i,y_i]*self.calc_transmission_lambda_xy[i][x_i][y_i]*ps)
+                        res+=C*numpy.fft.fftn(self.calc_Eopt_lambda_xy[i,x_i,y_i]*self.calc_transmission_lambda_xy[i][x_i][y_i]*ps*cf)
                         k=""
                         # maybe also put coherence constant here
                 self.calc_Eres_lambda_xy[i][u_i][v_i]=res
-        #fftshift
-        self.calc_Eres_lambda_xy[i][:][:]=numpy.fft.fftshift(self.calc_Eres_lambda_xy[i][:][:])
-    def Calculate_Coherence(self,OptorRes):
-        "Calculate coherence in given plane Opt=True Res=False "
-        #needs 4 cases no coherence, just temporal, just spatial, both
+
+    def Calculate_Result(self):
+        "Calculate & plot for all Wavelengths as a whole"
         #Select according field
-        E=self.calc_Eopt_lambda_xy if OptorRes else self.calc_Eres_lambda_xy
+        E=self.calc_Eres_lambda_xy
         #Have a look at temporal and spacial dimensions to make a decision
         x=[]
         y=[]
@@ -305,17 +314,15 @@ class Calculation:
             for m in range(2 ** self.Settings.sampling_FFT_N[1]):#loop y
                 for i in range(self.Settings.sampling_spectral_N):
                     # no coherence
-                    self.calc_IntensityResult[n,m,int(OptorRes)]+= numpy.real(E[i,n,m]*numpy.complex.conjugate(E[i,n,m]))
+                    self.calc_IntensityResult[n,m]+= numpy.real(E[i,n,m]*numpy.complex.conjugate(E[i,n,m]))
                 # get coordinates
-                x.append(self.OpticalElementData.oe_samplingarea[0][0] + self.d_x_step_OPT * n if OptorRes else self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * n)
-                y.append(self.OpticalElementData.oe_samplingarea[1][0] + self.d_y_step_OPT * m  if OptorRes else self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * m)
-                z.append(self.calc_IntensityResult[n,m,int(OptorRes)])
-
-
+                x.append(self.Settings.image_samplingarea[0][0] + self.d_x_step_RES * n)
+                y.append(self.Settings.image_samplingarea[1][0] + self.d_y_step_RES * m)
+                z.append(self.calc_IntensityResult[n,m])
         #plot and give out
         fig = plt.figure()
         ax = Axes3D(fig,elev=self.Settings.plotting_angles[0],azim=self.Settings.plotting_angles[1])
-        ax.set_title("Resulting Intensity in "+"optical plane" if OptorRes else "result plane")
+        ax.set_title("Resulting Intensity in result plane")
         ax.set_xlabel('x-axis (cm)', fontweight='bold')
         ax.set_ylabel('y-axis (cm)', fontweight='bold')
         ax.set_zlabel('Intensity', fontweight='bold')
@@ -330,12 +337,13 @@ class Calculation:
         #Also save Raw Data to file
         file = open(self.Directory+"/Result.txt","w+")
         content = []
-        content.append("Resulting Intensity Vectors in "+("optical plane" if OptorRes else "result plane"))
+        content.append("Resulting Intensity Vectors in result plane")
         content.append("\nVector Format [x,y,Intensity]")
         for i in range(len(x)):
             content.append("\n"+str([x[i],y[i],z[i]]))
         file.writelines(content)
         file.close()
+
     def Calculation(self):
         "Main Calculation Function-Legacy Console based version"
         start = time.time()
@@ -368,7 +376,6 @@ class Calculation:
         self.SaveInputData()
         self.Save_Data()
         print("Calculating Result")
-        #self.Calculate_Coherence(self.Settings.sampling_OptOrRes)
 
     def Save_Data(self):
         "Save SourceData,OpticalElementData,Settings"
