@@ -6,7 +6,7 @@ class SourceData:
         pass
     #Variables
     #Spectral function
-    source_spectrum=4#"1/(2e-9*sqrt(6.28))*exp(-(1/2)*((x-650e-9)/2e-9)**2)*10**-8" #x means lambda
+    source_spectrum=100#"1/(2e-9*sqrt(6.28))*exp(-(1/2)*((x-650e-9)/2e-9)**2)*10**-8" #x means lambda
     #Coherence Length
     source_coherencelength=4e-6
     #Samplingarea of spectral function (interval)
@@ -14,7 +14,7 @@ class SourceData:
     #Beam Radius of source in m
     source_beam_radius=0.0001
     #Radius of Curvature in m
-    source_curvature_radius=100
+    source_waistrad=0.00009
     #coordinates (defaults to 0,0,0), needed for further upgrades
     source_coordinates=[0,0,0]
 

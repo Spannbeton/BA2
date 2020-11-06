@@ -181,7 +181,6 @@ class Calculation:
         content.append("\nwith "+str(self.Settings.sampling_spectral_N)+" equidistant Points and a step of "+str(self.d_lambda_step)+" meters")
         content.append("\n\nGaussian Beam:")
         content.append("\nBeam radius at Source: "+str(self.SourceData.source_beam_radius) +" meters")
-        content.append("\nBeam curvature Radius: " +str(self.SourceData.source_curvature_radius) + " meters")
         content.append("\n\nOptical Element @z="+str(self.OpticalElementData.oe_coordinates[2])+ " meters")
         content.append("\nSampled in x Interval of "+str(self.OpticalElementData.oe_samplingarea[0])+" meters")
         content.append("\nwith "+str(2**self.Settings.sampling_FFT_N[0])+" equidistant Points and a step of "+ str(self.d_x_step_OPT)+" meters")
@@ -199,26 +198,14 @@ class Calculation:
     def Calculate_z_offset(self,wavelength):#as iterator
         "wavelength as iterator"
         #get wavelength
-        '''
+
         l=self.calc_sampling_lambda[wavelength]
-        R=self.SourceData.source_curvature_radius
-        W=self.SourceData.source_beam_radius
-        res=R/((1+(numpy.pi*(W**2)/(l*R))**-2)**0.5)
-        '''
-        res=10
+        W_s=self.SourceData.source_beam_radius
+        W_0=self.SourceData.source_waistrad
+
+        res=(numpy.pi*W_0**2/l)*((W_s**2/W_0**2)-1)**0.5
         return res
 
-    def Calculate_Waistrad(self,wavelength):#as iterator
-        "wavelength as iterator"
-        #get wavelength
-        '''
-        l=self.calc_sampling_lambda[wavelength]
-        R=self.SourceData.source_curvature_radius
-        W=self.SourceData.source_beam_radius
-        res=W/((1+(l*R/(numpy.pi*(W**2)))**-2)**0.5)
-        '''
-        res=0.01
-        return res
 
     def Calculate_Field(self,wavelength,x,y):#wavelength as iterator, x,y as value
         "Calculate the Field in optical plane at x,y"
@@ -226,16 +213,18 @@ class Calculation:
         E_0=self.calc_sampling_E0[wavelength]
         W_0=self.calc_sampling_waistrad[wavelength]
         z = OpticalElementData.oe_coordinates[2] - self.calc_sampling_offsets[wavelength][2]
+        #calculated stuff
+        r=(x**2+y**2)**0.5
         k=(2*numpy.pi)/l
+        z_r=numpy.pi*W_0**2/l
+        W_z=W_0*(1+(z/z_r)**2)**0.5
+        R_z=z*(1+(z_r/z)**2)**0.5
+        gouy=numpy.arctan(z/z_r)
         res=0
         #if within area of optical element, otherwise set field to 0
         if True: #(x>=self.OpticalElementData.oe_samplingarea[0][0] and x <=self.OpticalElementData.oe_samplingarea[0][1] and y>=self.OpticalElementData.oe_samplingarea[1][0] and y<=self.OpticalElementData.oe_samplingarea[1][1]):
-            frac=(1/complex(1+2j*z/(k*E_0**2)))
-            e1=(E_0*(numpy.exp(1j*k*z))*frac)
-            e2=numpy.exp(-((y**2)*frac)/(W_0**2))
-            e3=numpy.exp(-((x**2)*frac)/(W_0**2))
-            e4=(E_0*(numpy.exp(1j*k*z))*frac)*numpy.exp(-((x**2+y**2)*frac)/(W_0**2))
-            res= complex(e4)
+            e5=E_0*(W_0/W_z)*numpy.exp(-(r/W_z)**2)*numpy.exp((-1j*k*r**2)/(2*R_z))*numpy.exp(-1j*(k*z-gouy))
+            res= complex(e5)
         return res
 
     def Calculate_for_Wavelength(self, wavelength):
@@ -253,10 +242,10 @@ class Calculation:
         # Get Lambda
         la=self.SourceData.source_samplingarea[0] + self.d_lambda_step * i
         self.calc_sampling_lambda[i]=la
+        # Waistrad
+        self.calc_sampling_waistrad[i]=self.SourceData.source_waistrad
         # Offsets
         self.calc_sampling_offsets[i]=[0, 0, self.Calculate_z_offset(i)]
-        # Waistrad
-        self.calc_sampling_waistrad[i]=self.Calculate_Waistrad(i)
         # E_0(lambda) Field of Wavelengths
         self.calc_sampling_E0[i]=self.SourceData.source_spectrum_sympify.subs("x", self.calc_sampling_lambda[i])
         # loop x
@@ -275,14 +264,16 @@ class Calculation:
         print("calculating E_res")
         phaseshift= lambda l,x,u,y,v:numpy.exp((2j*numpy.pi/l)*((x-u)**2+(y-v)**2)**0.5)
         coherencefactor=lambda l,x,u,y,v:numpy.exp(-((x-u)**2+(y-v)**2)/L**2)
-
-        #Transmission Matrix
+        Opt_intensitysum=0
+        #Transmission Matrix and Intensitysum (opt)
         for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
                 x=self.calc_CoordsOPT_lambda_xy[i][m][n][0]
                 y=self.calc_CoordsOPT_lambda_xy[i][m][n][1]
                 self.calc_transmission_lambda_xy[i][m][n]=self.OpticalElementData.oe_transmissionfunction_sympify.subs((["x",x],["l",la],["y",y]),evaluate=True)
-        #calculate Results for each xy
+                Opt_intensitysum+=numpy.real(self.calc_Eopt_lambda_xy[i,m,n]*numpy.complex.conjugate(self.calc_Eopt_lambda_xy[i,m,n]))
+        #calculate Results for each xy and Intensitysum (res)
+        Res_intensitysum=0
         for u_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
 
             for v_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
@@ -298,9 +289,14 @@ class Calculation:
                         cf=coherencefactor(la, y, v, x, u)
                         trami=self.calc_transmission_lambda_xy[i][x_i][y_i]
                         res+=C*numpy.fft.fftn(self.calc_Eopt_lambda_xy[i,x_i,y_i]*self.calc_transmission_lambda_xy[i][x_i][y_i]*ps*cf)
-                        k=""
                         # maybe also put coherence constant here
                 self.calc_Eres_lambda_xy[i][u_i][v_i]=res
+                Res_intensitysum+=numpy.real(res*numpy.complex.conjugate(res))
+        #Scaling factor
+        k=Opt_intensitysum/Res_intensitysum
+        l=""
+
+
 
     def Calculate_Result(self):
         "Calculate & plot for all Wavelengths as a whole"

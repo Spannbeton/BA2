@@ -151,6 +151,7 @@ class GUI:
         ttk.Entry(self.tab3, textvariable=self.opt_transmission,width=100).grid(column=1, row=6, pady=5,columnspan=7)
         #apply button
         ttk.Button(self.tab3, text="Apply Settings", command=lambda: self.ApplyChanges_OpticalElement()).grid(row=8,padx=5,pady=5,columnspan=7)
+
         #Source Page
         #Sampling
         #Sampling Area
@@ -174,13 +175,13 @@ class GUI:
         #Beam
         ttk.Label(self.tab4, text="Gaussian Beam", font=('Arial', 20), anchor='w').grid(column=0, row=4, pady=20,columnspan=3)
         self.source_Beam_radius=tk.DoubleVar()
-        self.source_Beam_curveradius= tk.DoubleVar()
+        self.source_Beam_waistrad= tk.DoubleVar()
         self.source_Beam_radius.set(self.calc.SourceData.source_beam_radius)
-        self.source_Beam_curveradius.set(self.calc.SourceData.source_curvature_radius)
+        self.source_Beam_waistrad.set(self.calc.SourceData.source_waistrad)
         ttk.Label(self.tab4, text="Radius at Source (z=0):").grid(column=0, row=5, pady=5)
         ttk.Entry(self.tab4, textvariable=self.source_Beam_radius, width=10).grid(column=1, row=5, pady=5)
-        ttk.Label(self.tab4, text="Curvature radius").grid(column=0, row=6, pady=5)
-        ttk.Entry(self.tab4, textvariable=self.source_Beam_curveradius, width=10).grid(column=1, row=6, pady=5)
+        ttk.Label(self.tab4, text="Waistradius (Focus)").grid(column=0, row=6, pady=5)
+        ttk.Entry(self.tab4, textvariable=self.source_Beam_waistrad, width=10).grid(column=1, row=6, pady=5)
         #apply button
         ttk.Button(self.tab4, text="Apply Settings", command=lambda: self.ApplyChanges_Source()).grid( row=7, padx=5, pady=5,columnspan=7)
 
@@ -232,7 +233,7 @@ class GUI:
         self.calc.SourceData.source_samplingarea[0]=self.source_xstart.get()
         self.calc.SourceData.source_samplingarea[1]=self.source_xend.get()
         self.calc.SourceData.source_beam_radius=self.source_Beam_radius.get()
-        self.calc.SourceData.source_curvature_radius=self.source_Beam_curveradius.get()
+        self.calc.SourceData.source_waistrad=self.source_Beam_waistrad.get()
         self.calc.SourceData.source_coherencelength=self.source_coherencelength.get()
         self.Plot_Button['state'] = tk.DISABLED
 
