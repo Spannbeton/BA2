@@ -1,22 +1,19 @@
 import sympy
 import numpy
 import os #operating system
-#time
-import time
+import time#time
 from time import strftime
-#plotting
-import matplotlib.pyplot as plt
-from matplotlib.ticker import LinearLocator, FixedLocator, FormatStrFormatter
+import matplotlib.pyplot as plt#plotting
+from matplotlib.ticker import LinearLocator, FixedLocator
+from matplotlib.ticker import FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
-#threading
-import threading
+import threading #threading
+import pickle#saving data
 #my classes
 from SourceData import SourceData
 from OpticalElementData import OpticalElementData
 from Settings import Settings
-#saving data
-import pickle
 
 
 class Calculation:
@@ -65,11 +62,12 @@ class Calculation:
     def Plot_Spectrum(self):
         "Plot the Spectrum in sampled Interval"
         fig=plt.figure()
-        plt.title("Spectrum")
-        plt.xlabel("Wavelength(m)")
-        plt.ylabel("abs(Field)")
-        absE=[abs(i) for i in self.calc_sampling_E0]
-        plt.plot(self.calc_sampling_lambda,absE)
+        plt.title("Sampled Spectrum for N="+str(self.Settings.sampling_spectral_N))
+        plt.xlabel("Wavelength(nm)")
+        plt.ylabel("Intensity")
+        absE=[abs(i)**2 for i in self.calc_sampling_E0]#Intensity
+        la=[l*1000000000 for l in self.calc_sampling_lambda]#Wavelength
+        plt.plot(la,absE, marker='o')
         try:
             plt.savefig(self.Directory+"/Spectrum.png")
         except:
@@ -134,7 +132,7 @@ class Calculation:
         "Plot beam propagation in profile"
         fig = plt.figure()
         axes= fig.add_axes([0.2,0.1,0.8,0.8]) #x is z axis, y is Radius
-        zlim=[min(-0.1,self.SourceData.source_coordinates[2])*1.1,max(self.Settings.image_coordinates[2],self.OpticalElementData.oe_coordinates[2],0)*1.1]
+        zlim=[min(-0.01,self.SourceData.source_coordinates[2])*1.1,max(self.Settings.image_coordinates[2],self.OpticalElementData.oe_coordinates[2],0)*1.1]
         axes.set_xlim(zlim)
         plt.title("Beam Propagation for \u03BB="+str(round(self.calc_sampling_lambda[wavelength]*10**9,2))+" nm \n \u03C9_0="+str(round(self.calc_sampling_waistrad[wavelength]*1000,2))+"mm @z="+str(round(self.calc_sampling_offsets[wavelength][2]*100,2))+"cm")
         plt.xlabel("z-Axis (m)")
@@ -198,14 +196,11 @@ class Calculation:
     def Calculate_z_offset(self,wavelength):#as iterator
         "wavelength as iterator"
         #get wavelength
-
         l=self.calc_sampling_lambda[wavelength]
         W_s=self.SourceData.source_beam_radius
         W_0=self.SourceData.source_waistrad
-
         res=(numpy.pi*W_0**2/l)*((W_s**2/W_0**2)-1)**0.5
         return res
-
 
     def Calculate_Field(self,wavelength,x,y):#wavelength as iterator, x,y as value
         "Calculate the Field in optical plane at x,y"
@@ -264,18 +259,15 @@ class Calculation:
         print("calculating E_res")
         phaseshift= lambda l,x,u,y,v:numpy.exp((2j*numpy.pi/l)*((x-u)**2+(y-v)**2)**0.5)
         coherencefactor=lambda l,x,u,y,v:numpy.exp(-((x-u)**2+(y-v)**2)/L**2)
-        Opt_intensitysum=0
         #Transmission Matrix and Intensitysum (opt)
         for m in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
             for n in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
                 x=self.calc_CoordsOPT_lambda_xy[i][m][n][0]
                 y=self.calc_CoordsOPT_lambda_xy[i][m][n][1]
                 self.calc_transmission_lambda_xy[i][m][n]=self.OpticalElementData.oe_transmissionfunction_sympify.subs((["x",x],["l",la],["y",y]),evaluate=True)
-                Opt_intensitysum+=numpy.real(self.calc_Eopt_lambda_xy[i,m,n]*numpy.complex.conjugate(self.calc_Eopt_lambda_xy[i,m,n]))
         #calculate Results for each xy and Intensitysum (res)
-        Res_intensitysum=0
         for u_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
-
+            print("Working "+str(u_i+1)+" of "+str(2**self.Settings.sampling_FFT_N[0]))
             for v_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
                 u = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][0]
                 v = self.calc_CoordsRES_lambda_xy[i][u_i][v_i][1]
@@ -291,12 +283,19 @@ class Calculation:
                         res+=C*numpy.fft.fftn(self.calc_Eopt_lambda_xy[i,x_i,y_i]*self.calc_transmission_lambda_xy[i][x_i][y_i]*ps*cf)
                         # maybe also put coherence constant here
                 self.calc_Eres_lambda_xy[i][u_i][v_i]=res
-                Res_intensitysum+=numpy.real(res*numpy.complex.conjugate(res))
         #Scaling factor
-        k=Opt_intensitysum/Res_intensitysum
-        l=""
-
-
+        o_s=0
+        r_s=0
+        for x_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            for y_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                o_s += numpy.real(self.calc_Eopt_lambda_xy[i][x_i][y_i] * numpy.conjugate(self.calc_Eopt_lambda_xy[i][x_i][y_i]))
+        for u_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            for v_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                r_s += numpy.real(self.calc_Eres_lambda_xy[i][u_i][v_i] * numpy.conjugate(self.calc_Eres_lambda_xy[i][u_i][v_i]))
+        k = o_s / r_s
+        for u_i in range(0, 2 ** self.Settings.sampling_FFT_N[0]):
+            for v_i in range(0, 2 ** self.Settings.sampling_FFT_N[1]):
+                self.calc_Eres_lambda_xy[i][u_i][v_i]*=k
 
     def Calculate_Result(self):
         "Calculate & plot for all Wavelengths as a whole"
@@ -350,7 +349,6 @@ class Calculation:
         [pi.join() for pi in p]
         end = time.time()
         print("Calculation done in "+str(end-start))
-
 
     def Plot_All_SaveAll(self):
         "Main Plotting function-Legacy Console based version"
